@@ -1,0 +1,74 @@
+- hosts: jenkins-slave
+  become: true
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install OpenJDK 17 JDK, Maven, and utilities
+      apt:
+        name:
+          - openjdk-17-jdk
+          - maven
+          - curl
+          - wget
+        state: present
+
+    - name: Ensure JAVA_HOME environment variable is set globally
+      copy:
+        dest: /etc/profile.d/java.sh
+        content: |
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          export PATH=$JAVA_HOME/bin:$PATH
+        owner: root
+        group: root
+        mode: '0755'
+
+    # --- Docker Installation ---
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker APT repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable
+        state: present
+        filename: docker
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+
+    - name: Install Docker packages
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: latest
+
+    - name: Ensure Docker service is started and enabled
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # --- Allow Jenkins & Ubuntu users to access Docker ---
+    - name: Add 'ubuntu' user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Add 'jenkins' user to docker group (if Jenkins agent runs as 'jenkins')
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    - name: Reload group membership for Jenkins and Ubuntu (will take effect after reboot or relogin)
+      shell: newgrp docker
+      become: false
+      ignore_errors: yes
+

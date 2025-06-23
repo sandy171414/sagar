@@ -1,33 +1,57 @@
----
 - hosts: jenkins-master
-  become: true 
-  tasks: 
-  - name: add jenkins key 
-    apt_key: 
-      url:  https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-      state: present 
+  become: true
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
-  - name: add jenkins repo 
-    apt_repository: 
-      repo: 'deb https://pkg.jenkins.io/debian-stable binary/'
-      state: present 
+    - name: Install required dependencies
+      apt:
+        name:
+          - gnupg
+          - curl
+          - software-properties-common
+        state: present
 
-  - name: install java 
-    apt: 
-      name: openjdk-11-jre
-      state: present
+    - name: Download Jenkins GPG key to keyring
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
 
-  - name: install jenkins 
-    apt: 
-      name: jenkins 
-      state: present 
+    - name: Add Jenkins repository using signed-by keyring
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+        filename: jenkins
 
-  - name: start jenkins service 
-    service: 
-      name: jenkins 
-      state: started 
+    - name: Update apt cache after adding Jenkins repo
+      apt:
+        update_cache: yes
 
-  - name: enable jenkins to start at boot time 
-    service: 
-      name: jenkins 
-      enabled: yes 
+    - name: Install OpenJDK 17 (default repo)
+      apt:
+        name: openjdk-17-jre
+        state: present
+
+    - name: Set Java 17 as default
+      alternatives:
+        name: java
+        path: /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+        priority: 1
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+    - name: Ensure Jenkins service is started
+      service:
+        name: jenkins
+        state: started
+
+    - name: Enable Jenkins to start on boot
+      service:
+        name: jenkins
+        enabled: yes
+
